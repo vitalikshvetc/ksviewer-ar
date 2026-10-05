@@ -23250,6 +23250,8 @@ async function startAr(){
       new THREE.MeshBasicMaterial({color: 0x0f8f88, side: THREE.DoubleSide, depthTest: false, transparent: true}));
     arReticle.matrixAutoUpdate = false; arReticle.visible = false; arReticle.renderOrder = 1500;
     scene.add(arReticle);
+    window.arTest = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({color: 0xff00ff, depthTest: false}));
+    arTest.position.set(0, -0.15, -0.8); arTest.renderOrder = 1600; scene.add(arTest);     // тест: яркий кубик в 0,8 м перед стартовой позицией камеры
     arPlaced = false; arYaw = 0; arLastT = 0;
     session.addEventListener('end', arEnd);
     session.addEventListener('select', arSelect);
@@ -23274,9 +23276,10 @@ function arFrame(time, frame){
     const hits = frame.getHitTestResults(arHitSource);
     D.hits = hits.length;
     if (D.frames % 15 === 0) document.getElementById('arHint').textContent = (hits.length ? 'Поверхню знайдено — торкніться екрана' : 'Шукаю поверхню… повільно рухайте телефон; торкніться екрана — модель з’явиться перед вами')
-      + ' [кадрів ' + D.frames + ', hit-test ' + (arHitSource ? 'так' : 'ні') + ', знайдено ' + hits.length + ']';
+      + ' [кадрів ' + D.frames + ', hit ' + hits.length + ', pose ' + D.pose + ', кільце ' + (arReticle && arReticle.visible ? 'так ' + [12, 13, 14].map(i => arReticle.matrix.elements[i].toFixed(2)).join(',') : 'ні')
+      + ', викликів ' + renderer.info.render.calls + ', трик. ' + renderer.info.render.triangles + ', alpha ' + (renderer.getContext().getContextAttributes().alpha ? 'так' : 'ні') + ', logZ ' + (renderer.capabilities.logarithmicDepthBuffer ? 'так' : 'ні') + ']';
     if (hits.length){
-      const pose = hits[0].getPose(arBase);
+      const pose = hits[0].getPose(arBase); D.pose = pose ? 1 : 0;
       if (pose){ arReticle.visible = true; arReticle.matrix.fromArray(pose.transform.matrix); }
     } else arReticle.visible = false;
   }
@@ -23294,11 +23297,13 @@ function arSelect(){
     arHit.set(p.x + fwd.x * 1.5, p.y - 1.3, p.z + fwd.z * 1.5);      // пол ≈ на 1,3 м ниже уровня глаз
   }
   arPlaced = true; if (arReticle) arReticle.visible = false;
+  if (window.arTest) arTest.visible = false;
   arApplyPlacement();
   currentModelGroup.visible = true;
   document.getElementById('arHint').textContent = 'Модель у реальному розмірі. Ходіть навколо неї.';
 }
 function arEnd(){
+  if (window.arTest){ scene.remove(arTest); arTest.geometry.dispose(); arTest.material.dispose(); window.arTest = null; }
   if (arHitSource){ try { arHitSource.cancel(); } catch(e){} arHitSource = null; }
   if (arReticle){ scene.remove(arReticle); arReticle.geometry.dispose(); arReticle.material.dispose(); arReticle = null; }
   if (arSaved){ scene.background = arSaved.bg; grid.visible = arSaved.grid; currentModelGroup.visible = arSaved.model; arSaved = null; }
