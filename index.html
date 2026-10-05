@@ -23243,7 +23243,8 @@ async function startAr(){
     arBase = renderer.xr.getReferenceSpace();
     if (arHasHit){
       const viewer = await session.requestReferenceSpace('viewer');
-      arHitSource = await session.requestHitTestSource({space: viewer});
+      try { arHitSource = await session.requestHitTestSource({space: viewer, entityTypes: ['plane', 'point']}); }
+      catch(e){ arHitSource = await session.requestHitTestSource({space: viewer}); }
     }
     arReticle = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.16, 40).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({color: 0x0f8f88, side: THREE.DoubleSide, depthTest: false, transparent: true}));
@@ -23267,9 +23268,13 @@ function arFrame(time, frame){
   if (!frame) return;
   const dt = Math.min(0.1, arLastT ? (time - arLastT) / 1000 : 0.016); arLastT = time;
   try { updateAnimationRigs(dt); } catch(e){}
-  if (!arHasHit && frame.getViewerPose){ const vp = frame.getViewerPose(arBase); if (vp) arViewer = vp.transform; }
+  const D = (window.arDbg = window.arDbg || {frames: 0, hits: 0}); D.frames++;
+  if (frame.getViewerPose){ const vp = frame.getViewerPose(arBase); if (vp) arViewer = vp.transform; }
   if (!arPlaced && arHitSource){
     const hits = frame.getHitTestResults(arHitSource);
+    D.hits = hits.length;
+    if (D.frames % 15 === 0) document.getElementById('arHint').textContent = (hits.length ? 'Поверхню знайдено — торкніться екрана' : 'Шукаю поверхню… повільно рухайте телефон; торкніться екрана — модель з’явиться перед вами')
+      + ' [кадрів ' + D.frames + ', hit-test ' + (arHitSource ? 'так' : 'ні') + ', знайдено ' + hits.length + ']';
     if (hits.length){
       const pose = hits[0].getPose(arBase);
       if (pose){ arReticle.visible = true; arReticle.matrix.fromArray(pose.transform.matrix); }
@@ -23279,10 +23284,9 @@ function arFrame(time, frame){
 }
 function arSelect(){
   if (arPlaced){ if (!arHasOverlay){ arYaw += Math.PI / 4; arApplyPlacement(); } return; }
-  if (arHasHit){
-    if (!arReticle || !arReticle.visible) return;
+  if (arHasHit && arReticle && arReticle.visible){
     arHit.setFromMatrixPosition(arReticle.matrix);
-  } else {
+  } else {     // поверхня не знайдена — ставимо модель на ≈1,5 м перед камерою
     if (!arViewer) return;
     const p = arViewer.position, o = arViewer.orientation;
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(o.x, o.y, o.z, o.w)); fwd.y = 0;
